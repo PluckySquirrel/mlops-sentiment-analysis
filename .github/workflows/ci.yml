@@ -1,0 +1,75 @@
+name: CI/CD for Sentiment API
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v3
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: 📦 Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: 📂 Check dataset
+        run: |
+          ls data/
+          test -f data/test.csv || exit 1
+      - name: 🔍 Run lint check
+        run: |
+          pip install flake8
+          flake8 . --max-line-length=120 --exclude=venv
+      - name: 🧪 Run tests
+        run: |
+          pip install pytest pytest-asyncio
+          pytest tests/ --verbose
+      - name: 🧪 Run training
+        run: |
+          python train.py || exit 1
+      - name: ✅ Check model file
+        run: |
+          test -f models/sentiment_model.pkl || exit 1
+      - name: 🚀 Test API
+        run: |
+          pip install uvicorn httpx
+          uvicorn main:app --host 0.0.0.0 --port 8000 &
+          sleep 5
+          curl -X POST http://localhost:8000/predict -H "Content-Type: application/json" -d '{"review":"Great product!"}'
+          kill $(lsof -t -i:8000)
+
+  deploy:
+    needs: build-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v3
+      - name: 🚀 Deploy to Render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"serviceId":"$RENDER_SERVICE_ID"}' \
+            https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys
