@@ -14,8 +14,10 @@ logger = logging.getLogger(__name__)
 # Initialize app
 app = FastAPI(title="Sentiment Analysis API")
 
-# Load latest model
+# Global model variable
 MODEL_DIR = "models"
+model = None
+model_path = None
 
 
 def get_latest_model() -> str:
@@ -30,13 +32,18 @@ def get_latest_model() -> str:
         raise
 
 
-try:
-    model_path = get_latest_model()
-    model = joblib.load(model_path)
-    logger.info(f"Loaded model from {model_path}")
-except Exception as e:
-    logger.error(f"Failed to load model: {e}")
-    raise
+def load_model():
+    """Load the latest model if not already loaded."""
+    global model, model_path
+    if model is None:
+        try:
+            model_path = get_latest_model()
+            model = joblib.load(model_path)
+            logger.info(f"Loaded model from {model_path}")
+        except Exception as e:
+            logger.error(f"Failed to load model: {e}")
+            model = None
+            model_path = None
 
 
 # Schemas
@@ -64,6 +71,9 @@ async def read_root():
 async def get_model_info():
     """Return information about the loaded model."""
     logger.info("Received request for model info")
+    load_model()
+    if model is None:
+        raise HTTPException(status_code=500, detail="No model loaded")
     return {"model_path": model_path, "loaded_at": datetime.now().isoformat()}
 
 
@@ -76,6 +86,10 @@ async def predict_sentiment(data: ReviewRequest):
             logger.warning("Empty review received")
             raise HTTPException(status_code=400, detail="Review cannot be empty")
 
+        load_model()
+        if model is None:
+            raise HTTPException(status_code=500, detail="No model available")
+
         clean_review = clean_text(data.review)
         pred = model.predict([clean_review])[0]
         sentiment = "positive" if pred == 1 else "negative"
@@ -83,7 +97,7 @@ async def predict_sentiment(data: ReviewRequest):
         return {"sentiment": sentiment}
 
     except HTTPException as e:
-        raise e  # Re-raise HTTPException directly
+        raise e
     except Exception as e:
         logger.error(f"Error predicting sentiment: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
