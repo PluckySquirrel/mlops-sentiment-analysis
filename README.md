@@ -1,17 +1,24 @@
-# Sentiment Analysis with CI/CD
+# Sentiment Analysis API with CI/CD Pipeline
 
-This project implements a sentiment analysis model using scikit-learn and serves predictions via a FastAPI application. A CI/CD pipeline is configured using GitHub Actions.
+This project demonstrates a robust CI/CD pipeline for machine learning, using a sentiment analysis model as a case study. The system trains a Logistic Regression model on 50,000 movie reviews (25,000 train, 25,000 test) and deploys a FastAPI application to predict positive or negative sentiments.
+
+## CI/CD Pipeline
+- **Linting**: Ensures code quality using `flake8`.
+- **Testing**: Runs unit tests for preprocessing, training, and API endpoints.
+- **Dataset Validation**: Verifies `train.csv` and `test.csv` presence and structure.
+- **Training**: Trains the model and saves it to `models/`.
+- **Model Validation**: Checks model file integrity.
+- **Deployment**: Deploys to Render via GitHub Actions.
+- **Notifications**: Sends Slack alerts for deployment status.
 
 ## Setup
-1. Clone the repository: `git clone <repo-url>`
-2. Install dependencies: `pip install -r requirements.txt`
-3. Prepare dataset: Place `reviews.csv` in `data/`
-
-## Training
-Run `python train.py` to train the model and save it to `models/sentiment_model.pkl`.
-
-## API
-Start the API with `uvicorn src.api:app --reload`. Access at `http://localhost:8000`.
-
-## CI/CD
-The GitHub Actions pipeline (`ci.yml`) lints code, runs tests, trains the model, and deploys to Heroku.
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   python -m nltk.downloader stopwords punkt
+2. Train the model:
+   ```bash
+   python -m src.train_model data/train.csv data/test.csv models/
+3. Run the API:
+   ```bash
+   uvicorn main:app --host 0.0.0.0 --port 8000

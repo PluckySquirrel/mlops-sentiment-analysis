@@ -1,4 +1,4 @@
-name: CI/CD for Sentiment API
+name: CI/CD for Sentiment Analysis API
 
 on:
   push:
@@ -24,16 +24,23 @@ jobs:
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+      - name: 📦 Cache NLTK data
+        uses: actions/cache@v3
+        with:
+          path: ~/nltk_data
+          key: ${{ runner.os }}-nltk-${{ hashFiles('requirements.txt') }}
       - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: 📂 Check dataset
+          python -m nltk.downloader stopwords punkt
+      - name: 📂 Validate datasets
         run: |
           ls data/
+          test -f data/train.csv || exit 1
           test -f data/test.csv || exit 1
+          python -c "import pandas as pd; df = pd.read_csv('data/train.csv'); assert set(['review', 'label']).issubset(df.columns)"
+          python -c "import pandas as pd; df = pd.read_csv('data/test.csv'); assert set(['review', 'label']).issubset(df.columns)"
       - name: 🔍 Run lint check
         run: |
           pip install flake8
@@ -44,10 +51,12 @@ jobs:
           pytest tests/ --verbose
       - name: 🧪 Run training
         run: |
-          python train.py || exit 1
-      - name: ✅ Check model file
+          python -m src.train_model data/train.csv data/test.csv models/ || exit 1
+      - name: ✅ Validate model
         run: |
-          test -f models/sentiment_model.pkl || exit 1
+          ls models/
+          test -f models/sentiment_model_*.pkl || exit 1
+          python -c "import joblib; model = joblib.load(max([f for f in os.listdir('models') if f.startswith('sentiment_model_') and f.endswith('.pkl')]))"
       - name: 🚀 Test API
         run: |
           pip install uvicorn httpx
