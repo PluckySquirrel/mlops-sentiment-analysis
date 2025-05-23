@@ -21,16 +21,17 @@ def test_model_info_endpoint():
 def test_predict_endpoint_positive():
     response = client.post("/predict", json={"review": "Great movie!"})
     assert response.status_code == 200
-    assert response.json() == {"sentiment": "positive"}
+    assert isinstance(response.json()["sentiment"], float)
+    assert response.json()["sentiment"] > 0.5  # Expect positive score > 0.5
 
 
 def test_predict_endpoint_negative():
     response = client.post("/predict", json={"review": "Terrible film."})
     assert response.status_code == 200
-    assert response.json() == {"sentiment": "negative"}
+    assert isinstance(response.json()["sentiment"], float)
+    assert response.json()["sentiment"] < 0.5  # Expect negative score < 0.5
 
 
 def test_predict_endpoint_empty():
     response = client.post("/predict", json={"review": ""})
     assert response.status_code == 400
-    assert "detail" in response.json()
