@@ -8,17 +8,21 @@ from src.preprocessing import clean_text
 from typing import Dict
 from datetime import datetime
 
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+
 # Initialize app
 app = FastAPI(title="Sentiment Analysis API")
+
 
 # Global model variable
 MODEL_DIR = "models"
 model = None
 model_path = None
+
 
 def get_latest_model() -> str:
     """Return path to the latest model file."""
@@ -46,18 +50,22 @@ except Exception as e:
 class ReviewRequest(BaseModel):
     review: str
 
+
 class SentimentResponse(BaseModel):
     sentiment: str
+
 
 class ModelInfo(BaseModel):
     model_path: str
     loaded_at: str
+
 
 @app.get("/", response_model=Dict[str, str])
 async def read_root():
     """Welcome endpoint."""
     logger.info("Received request to root endpoint")
     return {"message": "Welcome to the Sentiment Analysis API"}
+
 
 @app.get("/model", response_model=ModelInfo)
 async def get_model_info():
@@ -66,6 +74,7 @@ async def get_model_info():
     if model is None:
         raise HTTPException(status_code=500, detail="No model loaded")
     return {"model_path": model_path, "loaded_at": datetime.now().isoformat()}
+
 
 @app.post("/predict", response_model=SentimentResponse)
 async def predict_sentiment(data: ReviewRequest):
