@@ -2,11 +2,17 @@
 import os
 import joblib
 import logging
+import asyncio
+import nltk
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from src.preprocessing import clean_text
 from typing import Dict
 from datetime import datetime
+
+
+# Configure NLTK data path
+nltk.data.path.append("/opt/render/nltk_data")  # Path used by Render (from logs)
 
 
 # Configure logging
@@ -18,6 +24,16 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Sentiment Analysis API")
 
 
+# Keep-alive task
+@app.on_event("startup")
+async def startup_event():
+    async def keep_alive():
+        while True:
+            logger.info("App is still alive")
+            await asyncio.sleep(60)  # Log every 60 seconds
+    asyncio.create_task(keep_alive())
+
+    
 # Global model variable
 MODEL_DIR = "models"
 model = None
@@ -43,9 +59,9 @@ try:
     logger.info(f"Loaded model from {model_path}")
 except Exception as e:
     logger.error(f"Failed to load model at startup: {e}")
-    raise  # Crash the app so Render logs the error
+    raise
 
-
+    
 # Schemas
 class ReviewRequest(BaseModel):
     review: str
@@ -69,6 +85,11 @@ async def head_root():
 async def read_root():
     """Welcome endpoint."""
     logger.info("Received request to root endpoint")
+    return {"message": "Welcome to the Sentiment Analysis API"}
+
+
+@app.head("/")
+async def head_root():
     return {"message": "Welcome to the Sentiment Analysis API"}
 
 
