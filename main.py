@@ -1,16 +1,17 @@
 # main.py
 import os
-from contextlib import asynccontextmanager
-
 import joblib
 import logging
 import asyncio
 import nltk
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from src.preprocessing import clean_text
 from typing import Dict
 from datetime import datetime
+from contextlib import asynccontextmanager
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
 
 # Configure logging
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
     try:
         nltk.download('stopwords', download_dir="/opt/render/nltk_data")
         nltk.download('punkt', download_dir="/opt/render/nltk_data")
+        nltk.download('vader_lexicon', download_dir="/opt/render/nltk_data")
         nltk.data.path.append("/opt/render/nltk_data")
         logger.info("NLTK resources downloaded successfully")
     except Exception as e:
@@ -43,8 +45,22 @@ async def lifespan(app: FastAPI):
     # Shutdown code (optional)
     logger.info("Shutting down application")
 
+
 # Initialize app with lifespan
 app = FastAPI(title="Sentiment Analysis API", lifespan=lifespan)
+nltk.download('vader_lexicon')
+analyzer = SentimentIntensityAnalyzer()
+
+
+# Enable CORS with enhanced configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for now; restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],  # Expose all headers to the client
+)
 
 
 # Global model variable
@@ -76,12 +92,16 @@ except Exception as e:
 
 
 # Schemas
+class TextInput(BaseModel):
+    text: str
+
+
 class ReviewRequest(BaseModel):
     review: str
 
 
 class SentimentResponse(BaseModel):
-    sentiment: str
+    sentiment: float  # Changed from str to float for score
 
 
 class ModelInfo(BaseModel):
@@ -126,10 +146,11 @@ async def predict_sentiment(data: ReviewRequest):
 
         clean_review = clean_text(data.review)
         logger.info(f"Cleaned review: {clean_review[:50]}...")
-        pred = model.predict([clean_review])[0]
-        sentiment = "positive" if pred == 1 else "negative"
-        logger.info(f"Predicted sentiment: {sentiment}")
-        return {"sentiment": sentiment}
+        pred_proba = model.predict_proba([clean_review])[0]
+        pred_class = model.predict([clean_review])[0]
+        score = pred_proba[1] if pred_class == 1 else 1 - pred_proba[0]  # Confidence score
+        logger.info(f"Predicted sentiment score: {score:.2f}")
+        return {"sentiment": score}
 
     except HTTPException as e:
         raise e
@@ -150,6 +171,21 @@ async def get_nltk_data():
 @app.get("/nltk-version")
 async def get_nltk_version():
     return {"nltk_version": nltk.__version__}
+
+
+@app.post("/analyze")
+async def analyze_text(input_data: TextInput):
+    logger.info(f"Analyzing text: {input_data.text[:50]}...")
+    try:
+        text = input_data.text
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="Invalid input: Text cannot be empty")
+        score = analyzer.polarity_scores(text)['compound']
+        logger.info(f"VADER sentiment score: {score:.2f}")
+        return {"text": text, "sentiment": score}
+    except Exception as e:
+        logger.error(f"Error analyzing text with VADER: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 if __name__ == "__main__":
