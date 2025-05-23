@@ -47,6 +47,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Sentiment Analysis API", lifespan=lifespan)
 
 
+# Keep-alive task
+@app.on_event("startup")
+async def startup_event():
+    async def keep_alive():
+        while True:
+            logger.info("App is still alive")
+            await asyncio.sleep(60)  # Log every 60 seconds
+    asyncio.create_task(keep_alive())
+
+
 # Global model variable
 MODEL_DIR = "models"
 model = None
@@ -89,15 +99,15 @@ class ModelInfo(BaseModel):
     loaded_at: str
 
 
+@app.head("/")
+async def head_root():
+    return {"message": "Welcome to the Sentiment Analysis API"}
+
+
 @app.get("/", response_model=Dict[str, str])
 async def read_root():
     """Welcome endpoint."""
     logger.info("Received request to root endpoint")
-    return {"message": "Welcome to the Sentiment Analysis API"}
-
-
-@app.head("/")
-async def head_root():
     return {"message": "Welcome to the Sentiment Analysis API"}
 
 
