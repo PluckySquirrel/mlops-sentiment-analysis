@@ -60,6 +60,11 @@ class ModelInfo(BaseModel):
     loaded_at: str
 
 
+@app.head("/")
+async def head_root():
+    return {"message": "Welcome to the Sentiment Analysis API"}
+
+
 @app.get("/", response_model=Dict[str, str])
 async def read_root():
     """Welcome endpoint."""
@@ -72,6 +77,7 @@ async def get_model_info():
     """Return information about the loaded model."""
     logger.info("Received request for model info")
     if model is None:
+        logger.error("Model is None during /model request")
         raise HTTPException(status_code=500, detail="No model loaded")
     return {"model_path": model_path, "loaded_at": datetime.now().isoformat()}
 
@@ -86,9 +92,11 @@ async def predict_sentiment(data: ReviewRequest):
             raise HTTPException(status_code=400, detail="Review cannot be empty")
 
         if model is None:
+            logger.error("Model is None during /predict request")
             raise HTTPException(status_code=500, detail="No model available")
 
         clean_review = clean_text(data.review)
+        logger.info(f"Cleaned review: {clean_review[:50]}...")
         pred = model.predict([clean_review])[0]
         sentiment = "positive" if pred == 1 else "negative"
         logger.info(f"Predicted sentiment: {sentiment}")
