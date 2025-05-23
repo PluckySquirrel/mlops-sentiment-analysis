@@ -1,7 +1,5 @@
 # main.py
 import os
-from contextlib import asynccontextmanager
-
 import joblib
 import logging
 import asyncio
@@ -11,6 +9,7 @@ from pydantic import BaseModel
 from src.preprocessing import clean_text
 from typing import Dict
 from datetime import datetime
+from contextlib import asynccontextmanager
 
 
 # Configure logging
@@ -42,6 +41,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown code (optional)
     logger.info("Shutting down application")
+
 
 # Initialize app with lifespan
 app = FastAPI(title="Sentiment Analysis API", lifespan=lifespan)
@@ -81,7 +81,7 @@ class ReviewRequest(BaseModel):
 
 
 class SentimentResponse(BaseModel):
-    sentiment: str
+    sentiment: float  # Changed from str to float for score
 
 
 class ModelInfo(BaseModel):
@@ -126,10 +126,11 @@ async def predict_sentiment(data: ReviewRequest):
 
         clean_review = clean_text(data.review)
         logger.info(f"Cleaned review: {clean_review[:50]}...")
-        pred = model.predict([clean_review])[0]
-        sentiment = "positive" if pred == 1 else "negative"
-        logger.info(f"Predicted sentiment: {sentiment}")
-        return {"sentiment": sentiment}
+        pred_proba = model.predict_proba([clean_review])[0]
+        pred_class = model.predict([clean_review])[0]
+        score = pred_proba[1] if pred_class == 1 else 1 - pred_proba[0]  # Confidence score
+        logger.info(f"Predicted sentiment score: {score:.2f}")
+        return {"sentiment": score}
 
     except HTTPException as e:
         raise e
