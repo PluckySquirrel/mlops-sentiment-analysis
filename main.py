@@ -33,7 +33,7 @@ async def startup_event():
             await asyncio.sleep(60)  # Log every 60 seconds
     asyncio.create_task(keep_alive())
 
-
+    
 # Global model variable
 MODEL_DIR = "models"
 model = None
@@ -61,7 +61,7 @@ except Exception as e:
     logger.error(f"Failed to load model at startup: {e}")
     raise
 
-
+    
 # Schemas
 class ReviewRequest(BaseModel):
     review: str
@@ -74,6 +74,11 @@ class SentimentResponse(BaseModel):
 class ModelInfo(BaseModel):
     model_path: str
     loaded_at: str
+
+
+@app.head("/")
+async def head_root():
+    return {"message": "Welcome to the Sentiment Analysis API"}
 
 
 @app.get("/", response_model=Dict[str, str])
@@ -123,7 +128,6 @@ async def predict_sentiment(data: ReviewRequest):
     except Exception as e:
         logger.error(f"Error predicting sentiment: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
 
 if __name__ == "__main__":
     import uvicorn

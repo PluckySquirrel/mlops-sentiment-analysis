@@ -67,6 +67,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+
       - name: Debug environment variables
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
@@ -78,6 +79,7 @@ jobs:
             echo "Error: One or both environment variables are empty"
             exit 1
           fi
+
 
       - name: Deploy to Render
         env:
