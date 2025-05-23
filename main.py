@@ -1,3 +1,4 @@
+# main.py
 import os
 import joblib
 import logging
@@ -32,18 +33,14 @@ def get_latest_model() -> str:
         raise
 
 
-def load_model():
-    """Load the latest model if not already loaded."""
-    global model, model_path
-    if model is None:
-        try:
-            model_path = get_latest_model()
-            model = joblib.load(model_path)
-            logger.info(f"Loaded model from {model_path}")
-        except Exception as e:
-            logger.error(f"Failed to load model: {e}")
-            model = None
-            model_path = None
+# Load model at startup
+try:
+    model_path = get_latest_model()
+    model = joblib.load(model_path)
+    logger.info(f"Loaded model from {model_path}")
+except Exception as e:
+    logger.error(f"Failed to load model at startup: {e}")
+    raise  # Crash the app so Render logs the error
 
 
 # Schemas
@@ -71,7 +68,6 @@ async def read_root():
 async def get_model_info():
     """Return information about the loaded model."""
     logger.info("Received request for model info")
-    load_model()
     if model is None:
         raise HTTPException(status_code=500, detail="No model loaded")
     return {"model_path": model_path, "loaded_at": datetime.now().isoformat()}
@@ -86,7 +82,6 @@ async def predict_sentiment(data: ReviewRequest):
             logger.warning("Empty review received")
             raise HTTPException(status_code=400, detail="Review cannot be empty")
 
-        load_model()
         if model is None:
             raise HTTPException(status_code=500, detail="No model available")
 
@@ -102,8 +97,6 @@ async def predict_sentiment(data: ReviewRequest):
         logger.error(f"Error predicting sentiment: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=8000)
