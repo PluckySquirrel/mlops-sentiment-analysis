@@ -1,5 +1,7 @@
 # main.py
 import os
+from contextlib import asynccontextmanager
+
 import joblib
 import logging
 import asyncio
@@ -11,17 +13,38 @@ from typing import Dict
 from datetime import datetime
 
 
-# Configure NLTK data path
-nltk.data.path.append("/opt/render/nltk_data")  # Path used by Render (from logs)
-
-
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
-# Initialize app
-app = FastAPI(title="Sentiment Analysis API")
+# Lifespan event handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup code
+    try:
+        nltk.download('stopwords', download_dir="/opt/render/nltk_data")
+        nltk.download('punkt', download_dir="/opt/render/nltk_data")
+        nltk.data.path.append("/opt/render/nltk_data")
+        logger.info("NLTK resources downloaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to download NLTK resources: {e}")
+        raise
+
+    # Start keep-alive task
+    async def keep_alive():
+        while True:
+            logger.info("App is still alive")
+            await asyncio.sleep(60)  # Log every 60 seconds
+    asyncio.create_task(keep_alive())
+
+    yield  # App runs here
+
+    # Shutdown code (optional)
+    logger.info("Shutting down application")
+
+# Initialize app with lifespan
+app = FastAPI(title="Sentiment Analysis API", lifespan=lifespan)
 
 
 # Keep-alive task
@@ -123,6 +146,21 @@ async def predict_sentiment(data: ReviewRequest):
     except Exception as e:
         logger.error(f"Error predicting sentiment: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/nltk-data")
+async def get_nltk_data():
+    try:
+        nltk.data.find('tokenizers/punkt')
+        return {"nltk_data_path": nltk.data.path, "punkt": "Found"}
+    except Exception as e:
+        return {"nltk_data_path": nltk.data.path, "punkt": str(e)}
+
+
+@app.get("/nltk-version")
+async def get_nltk_version():
+    return {"nltk_version": nltk.__version__}
+
 
 if __name__ == "__main__":
     import uvicorn
