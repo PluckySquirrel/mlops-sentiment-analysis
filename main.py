@@ -1,18 +1,51 @@
+# main.py
 import os
+from contextlib import asynccontextmanager
+
 import joblib
 import logging
+import asyncio
+import nltk
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from src.preprocessing import clean_text
 from typing import Dict
 from datetime import datetime
 
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Initialize app
-app = FastAPI(title="Sentiment Analysis API")
+
+# Lifespan event handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup code
+    try:
+        nltk.download('stopwords', download_dir="/opt/render/nltk_data")
+        nltk.download('punkt', download_dir="/opt/render/nltk_data")
+        nltk.data.path.append("/opt/render/nltk_data")
+        logger.info("NLTK resources downloaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to download NLTK resources: {e}")
+        raise
+
+    # Start keep-alive task
+    async def keep_alive():
+        while True:
+            logger.info("App is still alive")
+            await asyncio.sleep(60)  # Log every 60 seconds
+    asyncio.create_task(keep_alive())
+
+    yield  # App runs here
+
+    # Shutdown code (optional)
+    logger.info("Shutting down application")
+
+# Initialize app with lifespan
+app = FastAPI(title="Sentiment Analysis API", lifespan=lifespan)
+
 
 # Global model variable
 MODEL_DIR = "models"
@@ -32,18 +65,14 @@ def get_latest_model() -> str:
         raise
 
 
-def load_model():
-    """Load the latest model if not already loaded."""
-    global model, model_path
-    if model is None:
-        try:
-            model_path = get_latest_model()
-            model = joblib.load(model_path)
-            logger.info(f"Loaded model from {model_path}")
-        except Exception as e:
-            logger.error(f"Failed to load model: {e}")
-            model = None
-            model_path = None
+# Load model at startup
+try:
+    model_path = get_latest_model()
+    model = joblib.load(model_path)
+    logger.info(f"Loaded model from {model_path}")
+except Exception as e:
+    logger.error(f"Failed to load model at startup: {e}")
+    raise
 
 
 # Schemas
@@ -67,12 +96,17 @@ async def read_root():
     return {"message": "Welcome to the Sentiment Analysis API"}
 
 
+@app.head("/")
+async def head_root():
+    return {"message": "Welcome to the Sentiment Analysis API"}
+
+
 @app.get("/model", response_model=ModelInfo)
 async def get_model_info():
     """Return information about the loaded model."""
     logger.info("Received request for model info")
-    load_model()
     if model is None:
+        logger.error("Model is None during /model request")
         raise HTTPException(status_code=500, detail="No model loaded")
     return {"model_path": model_path, "loaded_at": datetime.now().isoformat()}
 
@@ -86,11 +120,12 @@ async def predict_sentiment(data: ReviewRequest):
             logger.warning("Empty review received")
             raise HTTPException(status_code=400, detail="Review cannot be empty")
 
-        load_model()
         if model is None:
+            logger.error("Model is None during /predict request")
             raise HTTPException(status_code=500, detail="No model available")
 
         clean_review = clean_text(data.review)
+        logger.info(f"Cleaned review: {clean_review[:50]}...")
         pred = model.predict([clean_review])[0]
         sentiment = "positive" if pred == 1 else "negative"
         logger.info(f"Predicted sentiment: {sentiment}")
@@ -103,7 +138,20 @@ async def predict_sentiment(data: ReviewRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@app.get("/nltk-data")
+async def get_nltk_data():
+    try:
+        nltk.data.find('tokenizers/punkt')
+        return {"nltk_data_path": nltk.data.path, "punkt": "Found"}
+    except Exception as e:
+        return {"nltk_data_path": nltk.data.path, "punkt": str(e)}
+
+
+@app.get("/nltk-version")
+async def get_nltk_version():
+    return {"nltk_version": nltk.__version__}
+
+
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=8000)
