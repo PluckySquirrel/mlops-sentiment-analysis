@@ -33,7 +33,7 @@ async def startup_event():
             await asyncio.sleep(60)  # Log every 60 seconds
     asyncio.create_task(keep_alive())
 
-    
+
 # Global model variable
 MODEL_DIR = "models"
 model = None
@@ -61,7 +61,7 @@ except Exception as e:
     logger.error(f"Failed to load model at startup: {e}")
     raise
 
-    
+
 # Schemas
 class ReviewRequest(BaseModel):
     review: str
@@ -85,11 +85,6 @@ async def head_root():
 async def read_root():
     """Welcome endpoint."""
     logger.info("Received request to root endpoint")
-    return {"message": "Welcome to the Sentiment Analysis API"}
-
-
-@app.head("/")
-async def head_root():
     return {"message": "Welcome to the Sentiment Analysis API"}
 
 
