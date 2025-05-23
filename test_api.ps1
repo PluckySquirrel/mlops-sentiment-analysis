@@ -7,6 +7,21 @@ $ErrorActionPreference = "Stop"
 # Install dependencies
 pip install uvicorn httpx
 
+# Check if port 8000 is in use
+$portInUse = netstat -aon | Select-String ":8000" | Select-String "LISTENING"
+if ($portInUse) {
+    Write-Output "Port 8000 is in use. Attempting to free it..."
+    $processId = ($portInUse -split '\s+')[-1]
+    try {
+        Stop-Process -Id $processId -Force -ErrorAction Stop
+        Write-Output "Terminated process $processId on port 8000"
+        Start-Sleep -Seconds 2
+    } catch {
+        Write-Output "Failed to terminate process $processId : $($_.Exception.Message)"
+        exit 1
+    }
+}
+
 # Start uvicorn server in background
 $process = Start-Process -FilePath ".\.venv\Scripts\python.exe" -ArgumentList "-m uvicorn main:app --host 0.0.0.0 --port 8000" -PassThru -NoNewWindow
 
@@ -24,9 +39,14 @@ try {
         exit 1
     }
 } catch {
-    Write-Output "Error connecting to API: $_"
+    Write-Output "Error connecting to API: $($_.Exception.Message)"
     exit 1
 } finally {
     # Stop uvicorn process
-    Stop-Process -Id $process.Id -Force
+    if ($process -and -not $process.HasExited) {
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        Write-Output "Stopped uvicorn process"
+    } else {
+        Write-Output "No uvicorn process to stop"
+    }
 }
