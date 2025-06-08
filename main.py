@@ -182,7 +182,7 @@ async def analyze_text(input_data: TextInput):
             raise HTTPException(status_code=400, detail="Invalid input: Text cannot be empty")
         score = analyzer.polarity_scores(text)['compound']
         logger.info(f"VADER sentiment score: {score:.2f}")
-        return {"text": text, "sentiment_score": score}
+        return {"text": text, "sentiment": score}
     except Exception as e:
         logger.error(f"Error analyzing text with VADER: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
