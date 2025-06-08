@@ -109,15 +109,15 @@ class ModelInfo(BaseModel):
     loaded_at: str
 
 
+@app.head("/")
+async def head_root():
+    return {"message": "Welcome to the Sentiment Analysis API"}
+
+
 @app.get("/", response_model=Dict[str, str])
 async def read_root():
     """Welcome endpoint."""
     logger.info("Received request to root endpoint")
-    return {"message": "Welcome to the Sentiment Analysis API"}
-
-
-@app.head("/")
-async def head_root():
     return {"message": "Welcome to the Sentiment Analysis API"}
 
 
