@@ -5,11 +5,13 @@ import logging
 import asyncio
 import nltk
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from src.preprocessing import clean_text
 from typing import Dict
 from datetime import datetime
 from contextlib import asynccontextmanager
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
 
 # Configure logging
@@ -24,6 +26,7 @@ async def lifespan(app: FastAPI):
     try:
         nltk.download('stopwords', download_dir="/opt/render/nltk_data")
         nltk.download('punkt', download_dir="/opt/render/nltk_data")
+        nltk.download('vader_lexicon', download_dir="/opt/render/nltk_data")
         nltk.data.path.append("/opt/render/nltk_data")
         logger.info("NLTK resources downloaded successfully")
     except Exception as e:
@@ -45,6 +48,19 @@ async def lifespan(app: FastAPI):
 
 # Initialize app with lifespan
 app = FastAPI(title="Sentiment Analysis API", lifespan=lifespan)
+nltk.download('vader_lexicon')
+analyzer = SentimentIntensityAnalyzer()
+
+
+# Enable CORS with enhanced configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for now; restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],  # Expose all headers to the client
+)
 
 
 # Global model variable
@@ -76,6 +92,10 @@ except Exception as e:
 
 
 # Schemas
+class TextInput(BaseModel):
+    text: str
+
+
 class ReviewRequest(BaseModel):
     review: str
 
@@ -151,6 +171,21 @@ async def get_nltk_data():
 @app.get("/nltk-version")
 async def get_nltk_version():
     return {"nltk_version": nltk.__version__}
+
+
+@app.post("/analyze")
+async def analyze_text(input_data: TextInput):
+    logger.info(f"Analyzing text: {input_data.text[:50]}...")
+    try:
+        text = input_data.text
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="Invalid input: Text cannot be empty")
+        score = analyzer.polarity_scores(text)['compound']
+        logger.info(f"VADER sentiment score: {score:.2f}")
+        return {"text": text, "sentiment_score": score}
+    except Exception as e:
+        logger.error(f"Error analyzing text with VADER: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 if __name__ == "__main__":
